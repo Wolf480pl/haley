@@ -1,6 +1,6 @@
 #!/usr/bin/env python2
 
-import socket, argparse, logging, threading, sys, time
+import socket, argparse, logging, threading, sys, time, re
 
 LOGLEVEL_RECV = 18
 LOGLEVEL_SENT = 17
@@ -23,6 +23,8 @@ class Magus(object):
             except:
                 self.haley.say(self.haley.channel, str(sys.exc_info()[0]))
 
+privmsg_regex = re.compile(":(?P<origin>[^ ]+) PRIVMSG (?P<target>) :?(?P<msg>.*)")
+
 # I would call it Responder, but hey, we gotta keep the theme :P
 class Receiver(threading.Thread):
     def __init__(self, haley, msg):
@@ -32,25 +34,28 @@ class Receiver(threading.Thread):
 
     def run(self):
         haley = self.haley
-        message = self.msg
-        friend = message.split(":")[1].split(" ")[0].split("!")[0]
+        match = privmsg_regex.match(self.msg)
+        if not match:
+            return
+        origin = match.group("origin")
+        friend = origin.split('!')[0]
+        target = match.group("target")
+        message = match.group("msg")
         if friend != haley.nickname:
-            for fill in haley.filters:
-                try:
-                    if fill[1](haley, message.split(" PRIVMSG %s :" % haley.channel, 1)[1], friend):
-                        break
-                except:
-                    self.say(friend, str(sys.exc_info()[0]))
+            if target == haley.nickname or target in haley.channels:
+                haley.run_filters(None, friend, message)
 
 class Haley(threading.Thread):
-    def __init__(self, host, port, channel, nickname):
+    def __init__(self, host, port, channels, nickname):
         threading.Thread.__init__(self)
         self.host = host
         self.port = port
-        if "#" not in channel:
-            self.channel = "#%s" % channel
-        else:
-            self.channel = channel
+        def fixChan(channel):
+            if "#" not in channel:
+                return "#%s" % channel
+            else:
+                return channel
+        self.channels = map(fixChan, channels)
         self.nickname = nickname
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.chrono = []
@@ -66,6 +71,13 @@ class Haley(threading.Thread):
             self.chrono.append(Magus(self, func, delta))
             return func
         return func_wrapper
+    def run_filters(self, channel, friend, message):
+        for fill in self.filters:
+            try:
+                if fill[1](self, message, friend):
+                    break
+            except:
+                self.say(friend, str(sys.exc_info()[0]))
     def send(self, message):
         for line in message.split("\n"):
             logging.log(LOGLEVEL_SENT, "%s", line)
@@ -96,20 +108,21 @@ class Haley(threading.Thread):
                 elif message.upper().startswith("PING"):
                     self.send("PONG%s" % message[4:])
                 elif message.startswith(":") and ("001 %s :" % self.nickname) in message and "PRIVMSG" not in message.upper():
-                    self.send("JOIN %s" % self.channel)
+                    for channel in self.channels:
+                        self.send("JOIN %s" % channel)
                     self.refresh()
-                elif (" PRIVMSG %s :" % self.channel) in message:
+                elif " PRIVMSG " in message:
                     Receiver(self, message).start()
             for cron in self.chrono: cron.update()
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Simple IRC bot")
     parser.add_argument("hostname", help="IRC server's IP or hostname")
-    parser.add_argument("channel", help="Channel to mess with, leading '#' not required")
+    parser.add_argument("channels", help="Channels to mess with, leading '#' not required")
     parser.add_argument("-p", "--port", default=6667, metavar="port", help="IRC server's port")
     parser.add_argument("-n", "--name", default="hal3y", metavar="name", help="Nickname for the bot to use")
     args = parser.parse_args()
-    overlord = Haley(args.hostname, args.port, args.channel, args.name)
+    overlord = Haley(args.hostname, args.port, args.channels.split(','), args.name)
     overlord.start()
     try:
         overlord.join()
