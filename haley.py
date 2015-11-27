@@ -60,15 +60,19 @@ class Haley(threading.Thread):
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.chrono = []
         self.filters = []
+    def add_filter(self, func, priority=1):
+        self.filters.append((priority,func))
+        self.filters.sort()
     def register_filter(self, priority=1):
         def func_wrapper(func):
-            self.filters.append((priority,func))
-            self.filters.sort()
+            self.add_filter(func, priority)
             return func
         return func_wrapper
+    def add_chrono(self, func, delta):
+        self.chrono.append(Magus(self, func, delta))
     def register_chrono(self, delta):
         def func_wrapper(func):
-            self.chrono.append(Magus(self, func, delta))
+            self.add_chrono(func, delta)
             return func
         return func_wrapper
     def run_filters(self, channel, friend, message):
