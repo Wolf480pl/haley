@@ -23,6 +23,24 @@ class Magus(object):
             except:
                 self.haley.say(self.haley.channel, str(sys.exc_info()[0]))
 
+# I would call it Responder, but hey, we gotta keep the theme :P
+class Receiver(threading.Thread):
+    def __init__(self, haley, msg):
+        threading.Thread.__init__(self)
+        self.haley = haley
+        self.msg = msg
+
+    def run(self):
+        haley = self.haley
+        message = self.msg
+        friend = message.split(":")[1].split(" ")[0].split("!")[0]
+        if friend != haley.nickname:
+            for fill in haley.filters:
+                try:
+                    if fill[1](haley, message.split(" PRIVMSG %s :" % haley.channel, 1)[1], friend):
+                        break
+                except:
+                    self.say(friend, str(sys.exc_info()[0]))
 
 class Haley(threading.Thread):
     def __init__(self, host, port, channel, nickname):
@@ -81,14 +99,7 @@ class Haley(threading.Thread):
                     self.send("JOIN %s" % self.channel)
                     self.refresh()
                 elif (" PRIVMSG %s :" % self.channel) in message:
-                    friend = message.split(":")[1].split(" ")[0].split("!")[0]
-                    if friend != self.nickname:
-                        for fill in self.filters:
-                            try:
-                                if fill[1](self, message.split(" PRIVMSG %s :" % self.channel, 1)[1], friend):
-                                    break
-                            except:
-                                self.say(friend, str(sys.exc_info()[0]))
+                    Receiver(self, message).start()
             for cron in self.chrono: cron.update()
 
 if __name__ == "__main__":
