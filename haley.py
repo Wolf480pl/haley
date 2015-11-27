@@ -42,8 +42,10 @@ class Receiver(threading.Thread):
         target = match.group("target")
         message = match.group("msg")
         if friend != haley.nickname:
-            if target == haley.nickname or target in haley.channels:
+            if target == haley.nickname:
                 haley.run_filters(None, friend, message)
+            elif target in haley.channels:
+                haley.run_filters(target, friend, message)
 
 class Haley(threading.Thread):
     def __init__(self, host, port, channels, nickname):
@@ -78,7 +80,7 @@ class Haley(threading.Thread):
     def run_filters(self, channel, friend, message):
         for fill in self.filters:
             try:
-                if fill[1](self, message, friend):
+                if fill[1](self, message, friend, channel):
                     break
             except:
                 self.say(friend, str(sys.exc_info()[0]))

@@ -66,13 +66,13 @@ class RuleMaker:
     def make_rule(self, regex, expr, prio=1, flags=''):
         stop = not 'p' in flags
         regex = re.compile(regex)
-        def filt(haley, message, friend):
+        def filt(haley, message, friend, channel):
             match = regex.match(message)
             if not match:
                 return False
             env = MatchEnviron(haley, match, self.env)
             env.put("user", friend)
             env.put("msg", message)
-            haley.say(env.evaluate(expr))
+            haley.say(channel or friend, env.evaluate(expr))
             return stop
         self.haley.add_filter(filt, prio)
