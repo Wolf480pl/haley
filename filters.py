@@ -55,8 +55,7 @@ def goodbye(self, message, friend, channel):
             else:
                 self.say(channel or friend, "Okay, %s, see you later!" % friend)
             self.send("QUIT :Bye!")
-            import sys
-            sys.exit()
+            self.stopping = True
         else:
             if self.mode:
                 self.say(channel or friend, "Insufficent privileges.")
@@ -121,8 +120,8 @@ def not_understand(self, message, friend, channel):
         return True
     return False
 
-@ruleenv.espose("time")
+@ruleenv.expose("time")
 def ev_time(self, msg):
     return time()
 
-rulemaker.make_rule("faris (.* )?time( .*)?\\?" "$time")
+rulemaker.make_rule("faris (.* )?time( .*)?\\?", "$time")

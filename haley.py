@@ -1,13 +1,15 @@
 #!/usr/bin/env python2
 
 import socket, argparse, logging, threading, sys, time, re
+import logging.config
 
 LOGLEVEL_RECV = 18
 LOGLEVEL_SENT = 17
 
 logging.addLevelName(LOGLEVEL_RECV, "RECV")
 logging.addLevelName(LOGLEVEL_SENT, "SENT")
-logging.basicConfig(level=15, filename="haley.log", format='%(asctime)s %(levelname)s %(message)s')
+#logging.basicConfig(level=15, filename="haley.log", format='%(asctime)s %(levelname)s %(message)s')
+logging.config.fileConfig('logging.conf')
 
 class Magus(object):
     def __init__(self, haley, func, delta):
@@ -23,7 +25,7 @@ class Magus(object):
             except:
                 self.haley.say(self.haley.channel, str(sys.exc_info()[0]))
 
-privmsg_regex = re.compile(":(?P<origin>[^ ]+) PRIVMSG (?P<target>) :?(?P<msg>.*)")
+privmsg_regex = re.compile(":(?P<origin>[^ ]+) PRIVMSG (?P<target>[^ ]+) :?(?P<msg>.*)")
 
 # I would call it Responder, but hey, we gotta keep the theme :P
 class Receiver(threading.Thread):
@@ -31,11 +33,14 @@ class Receiver(threading.Thread):
         threading.Thread.__init__(self)
         self.haley = haley
         self.msg = msg
+        #logging.info("receiver initialized")
 
     def run(self):
+        logging.debug("receiver started")
         haley = self.haley
         match = privmsg_regex.match(self.msg)
         if not match:
+            logging.debug("not match")
             return
         origin = match.group("origin")
         friend = origin.split('!')[0]
@@ -50,6 +55,8 @@ class Receiver(threading.Thread):
 class Haley(threading.Thread):
     def __init__(self, host, port, channels, nickname):
         threading.Thread.__init__(self)
+        self.setDaemon(True)
+        self.stopping = False
         self.host = host
         self.port = port
         def fixChan(channel):
@@ -118,10 +125,15 @@ class Haley(threading.Thread):
                         self.send("JOIN %s" % channel)
                     self.refresh()
                 elif " PRIVMSG " in message:
+                    #logging.info("receiver")
                     Receiver(self, message).start()
+                else:
+                    #logging.info("unknown")
+                    pass
             for cron in self.chrono: cron.update()
 
 if __name__ == "__main__":
+    logging.info("hi")
     parser = argparse.ArgumentParser(description="Simple IRC bot")
     parser.add_argument("hostname", help="IRC server's IP or hostname")
     parser.add_argument("channels", help="Channels to mess with, leading '#' not required")
@@ -131,5 +143,8 @@ if __name__ == "__main__":
     overlord = Haley(args.hostname, args.port, args.channels.split(','), args.name)
     overlord.start()
     try:
-        overlord.join()
-    except KeyboardInterrupt: sys.exit()
+        while overlord.isAlive() and not overlord.stopping:
+            overlord.join(1)
+    except KeyboardInterrupt:
+        logging.info("exitting")
+        sys.exit()
